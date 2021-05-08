@@ -12,14 +12,12 @@ class DWM:
     y_acc = 0
     z_acc = 0
 
-    def __init__(self, Close_Serial_Between = 0, debug = 0):
+    def __init__(self, Port = '/dev/ttyACM0', debug = 0):
         self.debug = debug
-        self.close_serial_between = Close_Serial_Between
 
-        if(self.close_serial_between == 0):
-            self.serialPort = serial.Serial(port="/dev/ttyS0", baudrate=115200, timeout=10)
-            print("Connected to " + self.serialPort.name)
-            self.write_uart("\r", 0.1)
+        self.serialPort = serial.Serial(port=Port, baudrate=115200, timeout=10)
+        self.write_debug("Connected to " + self.serialPort.name)
+        self.write_uart("\r", 0.1)
 
     def __str__(self):
         return "x: {}, y: {}, z: {}".format(self.x_pos, self.y_pos, self.z_pos)
@@ -32,8 +30,8 @@ class DWM:
         if (self.debug):
             print(debug_message)
             
-    def connect_to_node(self):  # Connecting to node
-        self.serialPort = serial.Serial(port="/dev/ttyS0", baudrate=115200, timeout=10)
+    def connect_to_node(self, Port):  # Connecting to node
+        self.serialPort = serial.Serial(port="/dev/Port", baudrate=115200, timeout=10)
         self.write_debug("Connected to " + self.serialPort.name)
 
         self.write_uart("\r", 0.1)
@@ -49,16 +47,13 @@ class DWM:
 
     def get_pos(self): # Getting posistion
         try:
-            if(self.close_serial_between):
-                self.connect_to_node()
-
             for i in range(10):
-                self.write_uart("apg\r", 0)
+                self.write_uart("apg\r", 0.1)
 
                 trash = self.serialPort.readline() # There is always 0 reading in the beginning, throwing it out
                 line = self.serialPort.readline()  # Reading incoming data from node
                 line = line.strip() # Taking \n and other symbols away
-                if len(line) >= 15:  # If the data is approriate length
+                if len(line) >= 9:  # If the data is approriate length
                     line = line[5:]
                     axis = line.split()
                     axis_numbers = []  # Create array for only numbers
@@ -79,9 +74,6 @@ class DWM:
                     # ", qf:"+ self.qf
                     # )
                     self.write_debug("x: {}, y: {}, z: {}".format(self.x_pos, self.y_pos, self.z_pos))
-
-                    if(self.close_serial_between):
-                        self.disconnect_from_node()
 
                     if (i == 10):
                         print("Failed to get position, tried 10 times!")
@@ -110,9 +102,7 @@ class DWM:
                 print(line)
                 numbers = [0, 0, 0]  # Create array for only numbers
                 if len(line) >= 15:  # If the data is approriate length
-                    print("11")
                     line = line[5:]
-                    print("22")
                     axis = line.split()
                     print(axis)
                     axis_numbers = []  # Create array for only numbers
@@ -213,8 +203,15 @@ class DWM:
         print("Serial command: stc")
     
 
-dwm1 = DWM(1, 1)
 
-for i in range(3):
-    dwm1.get_acc_data()
-    #print(dwm1)
+dwm1 = DWM(debug=1)
+
+
+def updating_pos():
+    global dwm1
+
+    dwm1.get_pos()
+
+
+while 1:
+    updating_pos()
