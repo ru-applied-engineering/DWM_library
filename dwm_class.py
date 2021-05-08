@@ -12,40 +12,42 @@ class DWM:
     y_acc = 0
     z_acc = 0
 
-    def __init__(self, Close_Serial_Between, debug):
+    def __init__(self, Close_Serial_Between = 0, debug = 0):
         self.debug = debug
         self.close_serial_between = Close_Serial_Between
 
         if(self.close_serial_between == 0):
             self.serialPort = serial.Serial(port="/dev/ttyS0", baudrate=115200, timeout=10)
             print("Connected to " + self.serialPort.name)
-            self.write_uart("\r\r", 0.1)
+            self.write_uart("\r", 0.1)
+
+    def __str__(self):
+        return "x: {}, y: {}, z: {}".format(self.x_pos, self.y_pos, self.z_pos)
 
     def write_uart(self, command, time_sleep): # Writing commands to uart
-        self.serialPort.write(command.encode(), "\r".encode())
+        self.serialPort.write("{}\r".format(command).encode())
         time.sleep(time_sleep)
 
     def write_debug(self, debug_message): # Writing debug message
         if (self.debug):
             print(debug_message)
             
-    def connect_to_node(self): # Connecting to node
+    def connect_to_node(self):  # Connecting to node
         self.serialPort = serial.Serial(port="/dev/ttyS0", baudrate=115200, timeout=10)
         self.write_debug("Connected to " + self.serialPort.name)
 
-        write_uart("\r\r", 0.1)
+        self.write_uart("\r", 0.1)
 
-    def disconnect_from_node(self, debug): # Disconnecting from node
-        self.write_uart("exit", 0.1)
+    def disconnect_from_node(self): # Disconnecting from node
+        #self.write_uart("quit", 0.1)
         self.serialPort.close()
-        if(self.debug):
-            print("Connection closed")
+        self.write_debug("Connection closed")
 
     def reset_node(self):
-        self.write_uart("reset")
+        self.write_uart("reset" ,0.5)
         # Gera eitthvað meira, tengjast aftur??
 
-    def get_pos(self, debug): # Getting posistion
+    def get_pos(self): # Getting posistion
         try:
             if(self.close_serial_between):
                 self.connect_to_node()
@@ -53,29 +55,82 @@ class DWM:
             for i in range(10):
                 self.write_uart("apg\r", 0)
 
-                trash = self.serialPort.readline()
+                trash = self.serialPort.readline() # There is always 0 reading in the beginning, throwing it out
                 line = self.serialPort.readline()  # Reading incoming data from node
                 line = line.strip() # Taking \n and other symbols away
-                numbers = [0, 0, 0, 0]  # Create array for only numbers
-                number_index = 0
                 if len(line) >= 15:  # If the data is approriate length
-                    for axis in line.split(b' '):  # Split the data up into axis and quality factor
-                        for temp in axis.split(b':'): # Splitting axis name from numbers
-                            if temp.lstrip(b'-').replace(b'.',b'', 1).isdigit(): # If the data is a number
-                                numbers[number_index] = int(temp)  # Putting it into number
-                                number_index += 1
+                    line = line[5:]
+                    axis = line.split()
+                    axis_numbers = []  # Create array for only numbers
+                    for temp in axis:
+                        temp = temp.split(b':')
+                        axis_numbers.append(int(temp[1]))
 
-                    self.x_pos = numbers[0] # Putting into approriate data
-                    self.y_pos = numbers[1]
-                    self.z_pos = numbers[2]
-                    self.qf = numbers[3]
+                    self.x_pos = axis_numbers[0] # Putting into approriate data
+                    self.y_pos = axis_numbers[1]
+                    self.z_pos = axis_numbers[2]
+                    self.qf = axis_numbers[3]
 
                     # If debug mode is enabled print out numbers
-                    self.write_debug(datetime.datetime.now().strftime("%H:%M:%S"),
-                    ": x:", self.x_pos,
-                    ", y:", self.y_pos,
-                    ", z:", self.z_pos,
-                    ", qf:", self.qf,
+                    # self.write_debug(datetime.datetime.now().strftime("%H:%M:%S") +
+                    # ": x:" + self.x_pos +
+                    # ", y:" + self.y_pos +
+                    # ", z:" + self.z_pos +
+                    # ", qf:"+ self.qf
+                    # )
+                    self.write_debug("x: {}, y: {}, z: {}".format(self.x_pos, self.y_pos, self.z_pos))
+
+                    if(self.close_serial_between):
+                        self.disconnect_from_node()
+
+                    if (i == 10):
+                        print("Failed to get position, tried 10 times!")
+
+                    break
+
+                else:
+                    self.write_debug('Line: {} Length: {}'.format(line.decode(), len(line)))
+
+                
+        except Exception as ex:
+            print(ex)
+
+
+    def get_acc_data(self):
+        try:
+            if(self.close_serial_between):
+                self.connect_to_node()
+
+            for i in range(10):
+                self.write_uart("av", 0.1)
+
+                #trash = self.serialPort.readline() # There is always 0 reading in the beginning, throwing it out
+                line = self.serialPort.readline()  # Reading incoming data from node
+                #line = line.strip()  # Taking \n and other symbols away
+                print(line)
+                numbers = [0, 0, 0]  # Create array for only numbers
+                if len(line) >= 15:  # If the data is approriate length
+                    print("11")
+                    line = line[5:]
+                    print("22")
+                    axis = line.split()
+                    print(axis)
+                    axis_numbers = []  # Create array for only numbers
+                    for temp in axis:
+                        print(temp)
+                        temp = temp.split(b',')
+                        axis_numbers.append(int(temp[0]))
+
+                    self.x_acc = numbers[0] # Putting into approriate data
+                    self.y_acc = numbers[1]
+                    self.z_acc = numbers[2]
+
+                    # If debug mode is enabled print out numbers
+                    self.write_debug(datetime.datetime.now().strftime("%H:%M:%S") +
+                    ": x:"+ self.x_pos+
+                    ", y:"+ self.y_pos+
+                    ", z:"+ self.z_pos+
+                    ", qf:"+ self.qf
                     )
 
                     if(self.close_serial_between):
@@ -84,7 +139,7 @@ class DWM:
                     break
 
                 else:
-                    self.write_debug("Line:", line.decode(), " Length: ", len(line))
+                    self.write_debug("Line:" + line.decode() + " Length: " + len(line))
                 
                 if (i == 10):
                     print("Failed to get position, tried 10 times!")
@@ -92,11 +147,6 @@ class DWM:
                 
         except Exception as ex:
             print(ex)
-
-
-    def get_acc_data(self):
-        self.write_uart("av\r")
-        #parsa gögn
 
     def pub_pos(self):
         print("Publishing pos on mosqitto")
@@ -165,5 +215,6 @@ class DWM:
 
 dwm1 = DWM(1, 1)
 
-while 1:
-    dwm1.get_pos(1)
+for i in range(3):
+    dwm1.get_acc_data()
+    #print(dwm1)
