@@ -14,16 +14,13 @@ class DWM:
 
     def __init__(self, Port = '/dev/ttyACM0', debug = 0):
         self.debug = debug
-
-        self.serialPort = serial.Serial(port=Port, baudrate=115200, timeout=10)
-        self.write_debug("Connected to " + self.serialPort.name)
-        self.write_uart("\r", 0.1)
+        self.connect_to_node(Port)
 
     def __str__(self):
-        return "x: {}, y: {}, z: {}".format(self.x_pos, self.y_pos, self.z_pos)
+        return "x: {}, y: {}, z: {} qf: {} ".format(self.x_pos, self.y_pos, self.z_pos, self.qf)
 
-    def write_uart(self, command, time_sleep): # Writing commands to uart
-        self.serialPort.write("{}\r".format(command).encode())
+    def write_uart(self, command, time_sleep):  # Writing commands to uart
+        self.serialPort.write(command.encode())
         time.sleep(time_sleep)
 
     def write_debug(self, debug_message): # Writing debug message
@@ -31,10 +28,9 @@ class DWM:
             print(debug_message)
             
     def connect_to_node(self, Port):  # Connecting to node
-        self.serialPort = serial.Serial(port="/dev/Port", baudrate=115200, timeout=10)
+        self.serialPort = serial.Serial(port=Port, baudrate=115200, timeout=10)
         self.write_debug("Connected to " + self.serialPort.name)
-
-        self.write_uart("\r", 0.1)
+        self.write_uart("\r\r", 1)
 
     def disconnect_from_node(self): # Disconnecting from node
         #self.write_uart("quit", 0.1)
@@ -47,41 +43,43 @@ class DWM:
 
     def get_pos(self): # Getting posistion
         try:
+            self.serialPort.flushInput()
+            self.serialPort.flushOutput()
             for i in range(10):
+                #print("i: {}".format(i))
                 self.write_uart("apg\r", 0.1)
 
-                trash = self.serialPort.readline() # There is always 0 reading in the beginning, throwing it out
+                #trash = self.serialPort.readline() # There is always 0 reading in the beginning, throwing it out
+                line = ""
                 line = self.serialPort.readline()  # Reading incoming data from node
-                line = line.strip() # Taking \n and other symbols away
-                if len(line) >= 9:  # If the data is approriate length
+                line = line.strip()  # Taking \n and other symbols away
+                #print("Line len: {}".format(len(line)))
+                if len(line) >= 15:  # If the data is approriate length
                     line = line[5:]
                     axis = line.split()
                     axis_numbers = []  # Create array for only numbers
                     for temp in axis:
                         temp = temp.split(b':')
-                        axis_numbers.append(int(temp[1]))
+                        if(len(temp) >= 2):
+                            axis_numbers.append(int(temp[1]))
+                    if(len(axis_numbers) >= 4):
+                        self.x_pos = axis_numbers[0] # Putting into approriate data
+                        self.y_pos = axis_numbers[1]
+                        self.z_pos = axis_numbers[2]
+                        self.qf = axis_numbers[3]
 
-                    self.x_pos = axis_numbers[0] # Putting into approriate data
-                    self.y_pos = axis_numbers[1]
-                    self.z_pos = axis_numbers[2]
-                    self.qf = axis_numbers[3]
+                        self.write_debug("x: {}, y: {}, z: {} qf: {}".format(self.x_pos, self.y_pos, self.z_pos, self.qf))  # If debug mode is enabled print out numbers
 
-                    # If debug mode is enabled print out numbers
-                    # self.write_debug(datetime.datetime.now().strftime("%H:%M:%S") +
-                    # ": x:" + self.x_pos +
-                    # ", y:" + self.y_pos +
-                    # ", z:" + self.z_pos +
-                    # ", qf:"+ self.qf
-                    # )
-                    self.write_debug("x: {}, y: {}, z: {}".format(self.x_pos, self.y_pos, self.z_pos))
+                        break
 
                     if (i == 10):
                         print("Failed to get position, tried 10 times!")
 
-                    break
-
                 else:
                     self.write_debug('Line: {} Length: {}'.format(line.decode(), len(line)))
+
+                time.sleep(1)
+
 
                 
         except Exception as ex:
@@ -201,17 +199,3 @@ class DWM:
 
     def clear_stats(self):
         print("Serial command: stc")
-    
-
-
-dwm1 = DWM(debug=1)
-
-
-def updating_pos():
-    global dwm1
-
-    dwm1.get_pos()
-
-
-while 1:
-    updating_pos()
