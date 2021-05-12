@@ -3,16 +3,16 @@ import time
 import datetime
 
 class DWM:
-    x_pos = 0
-    y_pos = 0
-    z_pos = 0
-    qf = 0
-
-    x_acc = 0
-    y_acc = 0
-    z_acc = 0
-
     def __init__(self, Port = '/dev/ttyACM0', debug = 0):
+        self.x_pos = 0.0
+        self.y_pos = 0.0
+        self.z_pos = 0.0
+        self.qf = 0.0
+
+        self.x_acc = 0.0
+        self.y_acc = 0.0
+        self.z_acc = 0.0
+
         self.debug = debug
         self.connect_to_node(Port)
 
@@ -22,6 +22,10 @@ class DWM:
     def write_uart(self, command, time_sleep):  # Writing commands to uart
         self.serialPort.write(command.encode())
         time.sleep(time_sleep)
+
+    def clear_uart(self):    
+        self.serialPort.flushInput()    
+        self.serialPort.flushOutput()
 
     def write_debug(self, debug_message): # Writing debug message
         if (self.debug):
@@ -43,14 +47,12 @@ class DWM:
 
     def get_pos(self): # Getting posistion
         try:
-            self.serialPort.flushInput()
-            self.serialPort.flushOutput()
+            self.clear_uart()
             for i in range(10):
                 #print("i: {}".format(i))
                 self.write_uart("apg\r", 0.1)
 
                 #trash = self.serialPort.readline() # There is always 0 reading in the beginning, throwing it out
-                line = ""
                 line = self.serialPort.readline()  # Reading incoming data from node
                 line = line.strip()  # Taking \n and other symbols away
                 #print("Line len: {}".format(len(line)))
@@ -75,63 +77,84 @@ class DWM:
                     if (i == 10):
                         print("Failed to get position, tried 10 times!")
 
-                else:
-                    self.write_debug('Line: {} Length: {}'.format(line.decode(), len(line)))
+                # else:
+                #     self.write_debug('Line: {} Length: {}'.format(line.decode(), len(line)))
 
-                time.sleep(1)
+            self.clear_uart()
+                
+        except Exception as ex:
+            print(ex)
 
+    def get_pos_avg(self, n):
+        try:
+            x_pos_sum, y_pos_sum, z_pos_sum, qf_sum = 0.0,0.0,0.0,0.0
+            self.clear_uart()
+            self.write_uart("lep\r", 0.1)
+            i = 0
+            while i < n:
+                line = self.serialPort.readline().strip()  # Reading incoming data from node & taking \n and other simbol
+                if len(line) >= 15:  # If the data is approriate length
+                    axis = line.split(b',')
+                    if(len(axis) >= 5):
+                        x_pos_sum += float(axis[1]) # Putting into approriate data
+                        y_pos_sum += float(axis[2])
+                        z_pos_sum += float(axis[3])
+                        qf_sum += float(axis[4])
 
+                        i += 1
+                    else:
+                        i -= 1
+
+                # else:
+                #     self.write_debug('Line: {} Length: {}'.format(line.decode(), len(line)))
+
+            self.x_pos = 1000*(x_pos_sum / float(n))
+            self.y_pos = 1000*(y_pos_sum / float(n))
+            self.z_pos = 1000*(z_pos_sum / float(n))
+            self.qf = qf_sum / float(n)
+
+            self.clear_uart()
+            time.sleep(0.1)
+            self.write_uart("lep\r", 0.1)
+            
+            self.write_debug("x: {}, y: {}, z: {} qf: {}".format(self.x_pos, self.y_pos, self.z_pos, self.qf))  # If debug mode is enabled print out numbers
+            self.clear_uart()
                 
         except Exception as ex:
             print(ex)
 
 
+
     def get_acc_data(self):
         try:
-            if(self.close_serial_between):
-                self.connect_to_node()
-
+            self.clear_uart()
             for i in range(10):
-                self.write_uart("av", 0.1)
+                self.write_uart("av\r", 0.1)
 
                 #trash = self.serialPort.readline() # There is always 0 reading in the beginning, throwing it out
                 line = self.serialPort.readline()  # Reading incoming data from node
-                #line = line.strip()  # Taking \n and other symbols away
-                print(line)
-                numbers = [0, 0, 0]  # Create array for only numbers
+                line = line.strip()  # Taking \n and other symbols away
                 if len(line) >= 15:  # If the data is approriate length
-                    line = line[5:]
+                    line = line[4:]
                     axis = line.split()
-                    print(axis)
                     axis_numbers = []  # Create array for only numbers
                     for temp in axis:
-                        print(temp)
-                        temp = temp.split(b',')
-                        axis_numbers.append(int(temp[0]))
+                        temp = temp.split(b'=')
+                        if(len(temp) >= 2):
+                            axis_numbers.append(int(temp[1]))
+                    if(len(axis_numbers) >= 3):
+                        self.x_pos = axis_numbers[0] # Putting into approriate data
+                        self.y_pos = axis_numbers[1]
+                        self.z_pos = axis_numbers[2]
 
-                    self.x_acc = numbers[0] # Putting into approriate data
-                    self.y_acc = numbers[1]
-                    self.z_acc = numbers[2]
+                        self.write_debug("x: {}, y: {}, z: {}".format(self.x_pos, self.y_pos, self.z_pos))  # If debug mode is enabled print out numbers
 
-                    # If debug mode is enabled print out numbers
-                    self.write_debug(datetime.datetime.now().strftime("%H:%M:%S") +
-                    ": x:"+ self.x_pos+
-                    ", y:"+ self.y_pos+
-                    ", z:"+ self.z_pos+
-                    ", qf:"+ self.qf
-                    )
+                        break
 
-                    if(self.close_serial_between):
-                        self.disconnect_from_node()
+                    if (i == 10):
+                        print("Failed to get position, tried 10 times!")
 
-                    break
-
-                else:
-                    self.write_debug("Line:" + line.decode() + " Length: " + len(line))
-                
-                if (i == 10):
-                    print("Failed to get position, tried 10 times!")
-
+            self.clear_uart()
                 
         except Exception as ex:
             print(ex)
