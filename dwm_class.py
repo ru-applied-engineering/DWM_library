@@ -123,8 +123,6 @@ class DWM:
         except Exception as ex:
             print(ex)
 
-
-
     def get_acc_data(self):
         try:
             self.clear_uart()
@@ -132,22 +130,23 @@ class DWM:
                 self.write_uart("av\r", 0.1)
 
                 #trash = self.serialPort.readline() # There is always 0 reading in the beginning, throwing it out
+                trash = self.serialPort.readline()
                 line = self.serialPort.readline()  # Reading incoming data from node
                 line = line.strip()  # Taking \n and other symbols away
                 if len(line) >= 15:  # If the data is approriate length
-                    line = line[4:]
-                    axis = line.split()
-                    axis_numbers = []  # Create array for only numbers
+                    line = line[5:]
+                    axis = line.split(b',')
+                    axis_numbers = []
                     for temp in axis:
                         temp = temp.split(b'=')
                         if(len(temp) >= 2):
                             axis_numbers.append(int(temp[1]))
                     if(len(axis_numbers) >= 3):
-                        self.x_pos = axis_numbers[0] # Putting into approriate data
-                        self.y_pos = axis_numbers[1]
-                        self.z_pos = axis_numbers[2]
+                        self.x_pos = int(axis_numbers[0]) # Putting into approriate data
+                        self.y_pos = int(axis_numbers[1])
+                        self.z_pos = int(axis_numbers[2])
 
-                        self.write_debug("x: {}, y: {}, z: {}".format(self.x_pos, self.y_pos, self.z_pos))  # If debug mode is enabled print out numbers
+                        self.write_debug("ACC: x: {}, y: {}, z: {}".format(self.x_pos, self.y_pos, self.z_pos))  # If debug mode is enabled print out numbers
 
                         break
 
@@ -162,30 +161,63 @@ class DWM:
     def pub_pos(self):
         print("Publishing pos on mosqitto")
 
-
     def sub_pos(self, topic):
         print("Subcribing pos on mosqitto", topic)
     
     def get_device_uptime(self):
-        self.write_uart("ut\r",0)
-        #parsa gögn
+        self.clear_uart()
+        self.write_uart("ut\r", 0)
+        trash = self.serialPort.readline()
+        line = self.serialPort.readline()  # Reading incoming data from node
+        line = line.strip()  # Taking \n and other symbols away
+        if len(line) >= 15:  # If the data is approriate length
+            data = line.split()
+            uptime = data[data.index(b'uptime:') + 1]
+            time = uptime.split(b':')
+            hours = int(time[0])
+            minutes = float(time[1])
+
+            uptime_days = int(data[data.index(b'uptime:') + 2])
+
+            self.write_debug("UPTIME: minutes: {}, hours: {}, days: {}".format(minutes, hours, uptime_days))  # If debug mode is enabled print out numbers
 
     def factory_reset_node(self):
         sure = input("Are you sure to factory reset?(y/n) ")
-        loop = 1
         if (sure == "y"):
-            self.write_uart("frst\r", 0)
+            self.write_uart("frst\r", 0.1)
         else:
             print("Aborting factory reset")
 
     def get_stationary_conf(self):
-        print("Serial command: scg")
+        self.clear_uart()
+        self.write_uart("scg\r", 0.1)
+
+        trash = self.serialPort.readline()
+        line = self.serialPort.readline()  # Reading incoming data from node
+        line.strip()
+        data = line.split(b'=')
+        sensitivity = int(data[1])
+
+        self.write_debug('Statinoary configuration: {}'.format(sensitivity))
+
 
     def set_stationary_conf(self, config_number):
-        print("Serial command: scs ", config_number)
+        if (config_number == 0 or config_number == 1 or config_number == 2):
+            self.clear_uart()
+            self.write_uart("scs " + str(config_number) + "\r", 0.1)
+        else:
+            print("Not a valid stationary configuration, choose between 0, 1 and 2")
+        
+        trash = self.serialPort.readline() 
+        line = self.serialPort.readline()  # Reading incoming data from node
+        print(str(line[5:].strip()))
+        self.clear_uart()
+
 
     def get_pos_update_rate(self):
         print("Serial command: aurg")
+
+
 
     def set_pos_update_rate(self, pos_update_rate):
         print("Serial command: aurs", pos_update_rate)
@@ -222,3 +254,13 @@ class DWM:
 
     def clear_stats(self):
         print("Serial command: stc")
+
+
+
+dwm = DWM(debug=1)
+
+dwm.get_pos()
+dwm.get_acc_data()
+dwm.get_device_uptime()
+dwm.set_stationary_conf(2)
+dwm.get_stationary_conf()
