@@ -213,10 +213,17 @@ class DWM:
         print(str(line[5:].strip()))
         self.clear_uart()
 
-
     def get_pos_update_rate(self):
-        print("Serial command: aurg")
+        self.clear_uart()
+        self.write_uart("aurg\r", 0.1)
 
+        trash = self.serialPort.readline()
+        line = self.serialPort.readline()  # Reading incoming data from node
+        line.strip()
+        data = line.split(b'=')
+        sensitivity = int(data[1])
+
+        self.write_debug('Statinoary configuration: {}'.format(sensitivity))
 
 
     def set_pos_update_rate(self, pos_update_rate):
